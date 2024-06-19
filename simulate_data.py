@@ -1,33 +1,45 @@
+from dataclasses import dataclass, field
+from typing import Callable
 from matplotlib import pyplot as plt
 
+from numpy.typing import NDArray
+
 import numpy as np
-from dataclasses import dataclass, field
 
 
-@dataclass
+
 class Simulation:
     num_locations: int
     days: int
-    population: np.ndarray = field(init=False)
-    movement: np.ndarray = field(init=False)
-    mov_ratio: np.ndarray = field(init=False)
-    initial_cond: np.ndarray = field(init=False)
-    beta: np.ndarray = field(init=False)
-    real_beta: np.ndarray = field(init=False)
-    results: np.ndarray = field(init=False)
-    data: np.ndarray = field(init=False)
+    population: NDArray[np.int_]
+    movement: NDArray[np.int_]
+    mov_ratio: NDArray[np.float_]
+    initial_cond: NDArray[np.int_]
+    beta: NDArray[np.float_]
+    real_beta: NDArray[np.float_]
+    results: NDArray[np.int_]
+    data: NDArray[np.int_]
 
-    def __post_init__(self):
-        np.random.seed(2)
+    def __init__(self,num_locations: int,
+                days:int,
+                beta_gen:Callable[[int,int],
+                NDArray[np.float_]], 
+                seed: int = 1) -> None:
+
+        self.num_locations = num_locations
+        self.days = days
+        np.random.seed(seed)
+
         self.population = self.gen_population(self.num_locations)
         self.movement = self.gen_movement(self.population, chain=1)
         self.mov_ratio = self.gen_mov_ratio(self.movement, self.population)
         self.initial_cond = self.gen_initial_cond(self.population)
         self.initial_cond[0, 1] = 5
-        self.real_beta = self.gen_step_beta(self.num_locations, self.days)
+        self.real_beta = beta_gen(self.num_locations, self.days)
         self.results = np.zeros((self.days, self.num_locations, 3))
         self.results[0, :, :] = self.initial_cond
         self.data = self.results[:, :, 1]
+
 
     @staticmethod
     def gen_population(n: int) -> np.ndarray:
@@ -110,51 +122,6 @@ class Simulation:
         R = np.zeros(n)
         return np.array([S, I, R]).T
 
-    @staticmethod
-    def switch_beta_value(
-        current_value: float, high_value: float, low_value: float
-    ) -> float:
-        """
-        Switches the beta value from high to low or vice versa.
-
-        Args:
-            current_value: Current beta value.
-            high_value: High beta value.
-            low_value: Low beta value.
-
-        Returns:
-            The switched beta value.
-        """
-        return low_value if current_value == high_value else high_value
-
-    def gen_step_beta(self, n: int, t: int, period: int = 31) -> np.ndarray:
-        """
-        Generates a step-function beta that switches value at each period.
-
-        Args:
-            n: Number of locations.
-            t: Number of time steps.
-            period: Time step at which beta switches value.
-
-        Returns:
-            A numpy array of beta values with shape (n, t).
-        """
-        beta_mean = np.random.uniform(0.5, 0.7, n)
-        beta = np.zeros((n, t))
-
-        for i in range(n):
-            high_value = beta_mean[i] + 0.08
-            low_value = beta_mean[i] - 0.08
-            current_value = high_value
-
-            for day in range(t):
-                if day % period == 0 and day != 0:
-                    current_value = self.switch_beta_value(
-                        current_value, high_value, low_value
-                    )
-                beta[i, day] = current_value
-
-        return beta
 
     def plot_mov_ratio(self):
         """Plot the movement ratio matrix using imshow."""
